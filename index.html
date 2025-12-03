@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>iframe 測試頁面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f9;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .input-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        input[type="text"] {
+            width: 70%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .iframe-container {
+            margin-top: 20px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+            min-height: 400px;
+        }
+        #testIframe {
+            width: 100%;
+            height: 600px;
+            border: none;
+        }
+        .status-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .status-success { 
+            color: green; 
+            font-weight: bold; 
+        }
+        .status-error { 
+            color: red; 
+            font-weight: bold; 
+        }
+        .status-warning { 
+            color: orange; 
+            font-weight: bold; 
+        }
+        pre {
+            background-color: #eee;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .blocked-message {
+            text-align: center;
+            padding: 40px;
+            background-color: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .info-box {
+            background-color: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>iframe 載入測試工具</h2>
+    <p>
+        此工具用於測試 URL 是否可以在 iframe 中正常載入，或是否被 X-Frame-Options、Content-Security-Policy 等安全策略阻擋。
+    </p>
+
+    <div class="input-section">
+        <label for="urlInput"><strong>輸入要測試的 URL：</strong></label><br><br>
+        <input 
+            type="text" 
+            id="urlInput" 
+            placeholder="例如: https://www.example.com"
+            value=""
+        >
+        <button onclick="loadIframe()">載入 iframe</button>
+        <button onclick="clearIframe()">清除</button>
+    </div>
+
+    <div class="status-section">
+        <h3>測試狀態</h3>
+        <p id="status-message">請輸入 URL 並點擊「載入 iframe」開始測試...</p>
+        <div id="status-details"></div>
+    </div>
+
+    <div class="iframe-container" id="iframeContainer">
+        <div class="loading" id="loadingMessage" style="display: none;">
+            <p>正在載入 iframe...</p>
+        </div>
+        <div class="blocked-message" id="blockedMessage" style="display: none;">
+            <h3>⚠️ iframe 可能被阻擋</h3>
+            <p id="blockedReason"></p>
+            <button onclick="openInNewTab()">在新視窗開啟</button>
+        </div>
+        <iframe id="testIframe" style="display: none;"></iframe>
+    </div>
+
+    <div class="info-box">
+        <h4>開發者工具觀察指南</h4>
+        <ol>
+            <li>打開瀏覽器的<strong>開發者工具 (F12)</strong>，切換到 <strong>Console (控制台)</strong> 標籤，觀察是否有錯誤訊息。</li>
+            <li>切換到 <strong>Network (網路)</strong> 標籤，查看 iframe 載入的請求。</li>
+            <li>檢查響應標頭中是否包含：
+                <ul>
+                    <li><code>X-Frame-Options: DENY</code> 或 <code>X-Frame-Options: SAMEORIGIN</code></li>
+                    <li><code>Content-Security-Policy: frame-ancestors 'none'</code> 或類似的 CSP 設定</li>
+                </ul>
+            </li>
+            <li>如果 iframe 顯示空白或錯誤，可能是被上述安全策略阻擋。</li>
+        </ol>
+    </div>
+</div>
+
+<script>
+    let currentUrl = '';
+    let loadTimeout = null;
+    let isLoaded = false;
+
+    function loadIframe() {
+        const urlInput = document.getElementById('urlInput');
+        const url = urlInput.value.trim();
+        
+        if (!url) {
+            alert('請輸入 URL');
+            return;
+        }
+
+        // 驗證 URL 格式
+        try {
+            new URL(url);
+        } catch (e) {
+            alert('請輸入有效的 URL');
+            return;
+        }
+
+        currentUrl = url;
+        isLoaded = false;
+        
+        // 重置狀態
+        document.getElementById('status-message').textContent = '正在載入 iframe...';
+        document.getElementById('status-message').className = '';
+        document.getElementById('status-details').innerHTML = '';
+        document.getElementById('loadingMessage').style.display = 'block';
+        document.getElementById('blockedMessage').style.display = 'none';
+        document.getElementById('testIframe').style.display = 'none';
+        
+        const iframe = document.getElementById('testIframe');
+        const statusMessage = document.getElementById('status-message');
+        const statusDetails = document.getElementById('status-details');
+        
+        // 清除之前的超時
+        if (loadTimeout) {
+            clearTimeout(loadTimeout);
+        }
+
+        // 設定載入超時檢測（5秒）
+        loadTimeout = setTimeout(() => {
+            if (!isLoaded) {
+                checkIframeStatus();
+            }
+        }, 5000);
+
+        // 監聽 iframe 載入事件
+        iframe.onload = function() {
+            isLoaded = true;
+            if (loadTimeout) {
+                clearTimeout(loadTimeout);
+            }
+            
+            setTimeout(() => {
+                checkIframeStatus();
+            }, 500);
+        };
+
+        // 監聽 iframe 錯誤事件
+        iframe.onerror = function() {
+            isLoaded = true;
+            if (loadTimeout) {
+                clearTimeout(loadTimeout);
+            }
+            showBlocked('iframe 載入發生錯誤');
+        };
+
+        // 載入 iframe
+        iframe.src = url;
+    }
+
+    function checkIframeStatus() {
+        const iframe = document.getElementById('testIframe');
+        const statusMessage = document.getElementById('status-message');
+        const statusDetails = document.getElementById('status-details');
+        const loadingMessage = document.getElementById('loadingMessage');
+        
+        loadingMessage.style.display = 'none';
+        iframe.style.display = 'block';
+
+        try {
+            // 嘗試存取 iframe 內容來檢測是否被 block
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+            
+            if (iframeDoc) {
+                // 可以存取內容，iframe 正常載入
+                statusMessage.className = 'status-success';
+                statusMessage.textContent = '✅ iframe 載入成功！';
+                statusDetails.innerHTML = `
+                    <p><strong>狀態：</strong>iframe 可以正常顯示</p>
+                    <p><strong>URL：</strong>${currentUrl}</p>
+                    <p><strong>注意：</strong>如果 iframe 內容顯示空白，可能是因為跨域限制無法存取內容，但 iframe 本身已成功載入。</p>
+                `;
+            } else {
+                // 無法存取內容，可能是跨域問題
+                statusMessage.className = 'status-warning';
+                statusMessage.textContent = '⚠️ iframe 已載入，但無法存取內容（可能是跨域限制）';
+                statusDetails.innerHTML = `
+                    <p><strong>狀態：</strong>iframe 已載入，但無法檢測內容（跨域限制）</p>
+                    <p><strong>URL：</strong>${currentUrl}</p>
+                    <p><strong>說明：</strong>這是正常的跨域行為。請檢查 iframe 是否顯示了實際內容。</p>
+                `;
+            }
+        } catch (e) {
+            // 跨域錯誤，無法存取 iframe 內容
+            // 這不一定代表被 block，可能是正常的跨域限制
+            statusMessage.className = 'status-warning';
+            statusMessage.textContent = '⚠️ 無法存取 iframe 內容（跨域限制）';
+            statusDetails.innerHTML = `
+                <p><strong>狀態：</strong>無法檢測 iframe 內容（跨域安全限制）</p>
+                <p><strong>URL：</strong>${currentUrl}</p>
+                <p><strong>錯誤：</strong>${e.message}</p>
+                <p><strong>說明：</strong>請檢查 iframe 是否顯示了實際內容。如果顯示空白，可能是被 X-Frame-Options 或 CSP 阻擋。</p>
+            `;
+            
+            // 檢查是否真的被 block（通過檢查 iframe 的實際顯示）
+            setTimeout(() => {
+                // 嘗試用 fetch 檢查響應標頭
+                checkResponseHeaders();
+            }, 1000);
+        }
+    }
+
+    function checkResponseHeaders() {
+        // 使用 fetch 檢查響應標頭
+        fetch(currentUrl, { method: 'HEAD', mode: 'no-cors' })
+            .catch(() => {
+                // 無法檢查（可能是 CORS 限制）
+                // 檢查 iframe 是否真的顯示了內容
+                const iframe = document.getElementById('testIframe');
+                try {
+                    // 檢查 iframe 的寬度和高度是否正常
+                    const rect = iframe.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) {
+                        // iframe 有尺寸，可能正常顯示
+                        console.log('iframe 有尺寸，可能正常顯示');
+                    }
+                } catch (e) {
+                    console.error('無法檢查 iframe 狀態:', e);
+                }
+            });
+    }
+
+    function showBlocked(reason) {
+        const statusMessage = document.getElementById('status-message');
+        const statusDetails = document.getElementById('status-details');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const blockedMessage = document.getElementById('blockedMessage');
+        const blockedReason = document.getElementById('blockedReason');
+        const iframe = document.getElementById('testIframe');
+        
+        loadingMessage.style.display = 'none';
+        iframe.style.display = 'none';
+        blockedMessage.style.display = 'block';
+        
+        statusMessage.className = 'status-error';
+        statusMessage.textContent = '❌ iframe 可能被阻擋';
+        blockedReason.textContent = reason || 'iframe 無法載入，可能被 X-Frame-Options 或 Content-Security-Policy 阻擋';
+        
+        statusDetails.innerHTML = `
+            <p><strong>狀態：</strong>iframe 載入失敗</p>
+            <p><strong>URL：</strong>${currentUrl}</p>
+            <p><strong>可能的原因：</strong></p>
+            <ul>
+                <li>X-Frame-Options: DENY 或 SAMEORIGIN</li>
+                <li>Content-Security-Policy: frame-ancestors 'none'</li>
+                <li>網路錯誤或 URL 無效</li>
+            </ul>
+            <p><strong>建議：</strong>請檢查瀏覽器控制台和 Network 標籤獲取詳細資訊。</p>
+        `;
+    }
+
+    function clearIframe() {
+        const iframe = document.getElementById('testIframe');
+        iframe.src = '';
+        iframe.style.display = 'none';
+        document.getElementById('loadingMessage').style.display = 'none';
+        document.getElementById('blockedMessage').style.display = 'none';
+        document.getElementById('status-message').textContent = '已清除 iframe';
+        document.getElementById('status-message').className = '';
+        document.getElementById('status-details').innerHTML = '';
+        currentUrl = '';
+        isLoaded = false;
+        if (loadTimeout) {
+            clearTimeout(loadTimeout);
+            loadTimeout = null;
+        }
+    }
+
+    function openInNewTab() {
+        if (currentUrl) {
+            window.open(currentUrl, '_blank');
+        }
+    }
+
+    // 允許 Enter 鍵載入
+    document.getElementById('urlInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            loadIframe();
+        }
+    });
+</script>
+
+</body>
+</html>
