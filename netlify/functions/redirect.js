@@ -15,9 +15,6 @@ function checkCORS(origin) {
 // 设置 CORS 响应头
 function setCORSHeaders(origin) {
   const headers = {
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Credentials': 'true'
   };
   
   if (origin && checkCORS(origin)) {
